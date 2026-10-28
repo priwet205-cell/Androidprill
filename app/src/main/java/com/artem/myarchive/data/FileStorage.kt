@@ -10,6 +10,7 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.InputStream
 import java.util.UUID
 
 /**
@@ -64,6 +65,40 @@ class FileStorage(private val context: Context) {
             kind = detectKind(mime, ext),
             size = target.length(),
         )
+    }
+
+    /** Сохраняет содержимое [input] как новое вложение с именем [displayName] (используется при импорте). */
+    fun importStream(displayName: String, input: InputStream): Attachment {
+        val ext = displayName.substringAfterLast('.', "").lowercase()
+        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+        val fileName = UUID.randomUUID().toString() + if (ext.isNotEmpty()) ".$ext" else ""
+        val target = File(dir, fileName)
+        target.outputStream().use { input.copyTo(it) }
+        return Attachment(
+            entryId = 0,
+            displayName = displayName,
+            mimeType = mime,
+            fileName = fileName,
+            kind = detectKind(mime, ext),
+            size = target.length(),
+        )
+    }
+
+    /** Имя файла, которым поделилось другое приложение (например, «Документы.zip»). */
+    fun displayName(uri: Uri): String? =
+        runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null
+            }
+        }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/')
+
+    /** Копирует файл по [uri] во временную папку (zip нужно читать с произвольным доступом). */
+    fun copyToTemp(uri: Uri): File {
+        val tmp = File(context.cacheDir, "import").apply { mkdirs() }
+        val file = File(tmp, "import.zip")
+        val input = context.contentResolver.openInputStream(uri) ?: error("Не удалось открыть файл")
+        input.use { src -> file.outputStream().use { src.copyTo(it) } }
+        return file
     }
 
     suspend fun delete(attachments: List<Attachment>) = withContext(Dispatchers.IO) {

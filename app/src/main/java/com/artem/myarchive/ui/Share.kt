@@ -1,6 +1,7 @@
 package com.artem.myarchive.ui
 
 import android.content.Context
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -58,7 +59,50 @@ fun rememberShareAction(): ShareAction {
 /** Окно ожидания, пока собирается архив (большие видео копируются не мгновенно). */
 @Composable
 fun ShareProgress(action: ShareAction) {
-    if (!action.busy) return
+    if (action.busy) ProgressDialog("Подготовка архива…")
+}
+
+/** Импорт zip-архива (из меню «Открыть с помощью» или кнопкой «Импорт»). */
+class ImportAction(private val context: Context, private val scope: CoroutineScope) {
+    var busy by mutableStateOf(false)
+        private set
+
+    fun import(uri: Uri, targetId: Long?, onDone: () -> Unit = {}) {
+        if (busy) return
+        busy = true
+        scope.launch {
+            try {
+                val result = context.repository.importZip(uri, targetId)
+                val parts = listOfNotNull(
+                    result.sections.takeIf { it > 0 }?.let { plural(it, "раздел", "раздела", "разделов") },
+                    result.entries.takeIf { it > 0 }?.let { plural(it, "запись", "записи", "записей") },
+                )
+                val message = if (parts.isEmpty()) "В архиве нет данных для импорта" else "Добавлено: " + parts.joinToString(" и ")
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Не удалось открыть архив: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                busy = false
+                onDone()
+            }
+        }
+    }
+}
+
+@Composable
+fun rememberImportAction(): ImportAction {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    return remember { ImportAction(context.applicationContext, scope) }
+}
+
+@Composable
+fun ImportProgress(action: ImportAction) {
+    if (action.busy) ProgressDialog("Импорт архива…")
+}
+
+@Composable
+fun ProgressDialog(text: String) {
     Dialog(
         onDismissRequest = {},
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
@@ -70,7 +114,7 @@ fun ShareProgress(action: ShareAction) {
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 CircularProgressIndicator(Modifier.size(28.dp))
-                Text("Подготовка архива…")
+                Text(text)
             }
         }
     }

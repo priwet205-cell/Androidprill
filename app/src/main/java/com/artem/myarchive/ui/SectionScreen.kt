@@ -2,6 +2,8 @@ package com.artem.myarchive.ui
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -136,6 +139,10 @@ fun SectionScreen(
     BackHandler(enabled = selecting) { clearSelection() }
 
     val shareAction = rememberShareAction()
+    val importAction = rememberImportAction()
+    val pickZip = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) importAction.import(uri, sectionId)
+    }
     val rootTitle = "Инженерный справочник"
     fun shareSelected() {
         val oneSection = selectedSections.singleOrNull()?.takeIf { selectedEntries.isEmpty() }
@@ -199,6 +206,9 @@ fun SectionScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { pickZip.launch(arrayOf("*/*")) }) {
+                        Icon(Icons.Default.Unarchive, contentDescription = "Импорт из zip")
+                    }
                     if (!subsections.isNullOrEmpty() || !entries.isNullOrEmpty()) {
                         IconButton(onClick = { selecting = true }) {
                             Icon(Icons.Default.Share, contentDescription = "Выбрать и отправить")
@@ -314,6 +324,7 @@ fun SectionScreen(
     }
 
     ShareProgress(shareAction)
+    ImportProgress(importAction)
 
     when (val d = dialog) {
         null -> Unit

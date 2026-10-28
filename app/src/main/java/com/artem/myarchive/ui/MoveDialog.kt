@@ -51,6 +51,9 @@ fun MoveDialog(
     startId: Long?,
     onDismiss: () -> Unit,
     onMove: (targetId: Long?) -> Unit,
+    title: String = "Переместить в…",
+    confirmText: String = "Переместить сюда",
+    allowStart: Boolean = false,
 ) {
     val repo = LocalContext.current.repository
     var currentId by remember { mutableStateOf(startId) }
@@ -61,11 +64,11 @@ fun MoveDialog(
         .collectAsState(initial = emptyList())
 
     val atRoot = currentId == null
-    val canMoveHere = !(hasEntries && atRoot) && currentId != startId
+    val canMoveHere = !(hasEntries && atRoot) && (allowStart || currentId != startId)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Переместить в…") },
+        title = { Text(title) },
         text = {
             Column {
                 Row(
@@ -116,7 +119,7 @@ fun MoveDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onMove(currentId) }, enabled = canMoveHere) { Text("Переместить сюда") }
+            TextButton(onClick = { onMove(currentId) }, enabled = canMoveHere) { Text(confirmText) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )

@@ -1,5 +1,6 @@
 package com.artem.myarchive.data
 
+import android.net.Uri
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -158,6 +159,9 @@ class Repository(private val db: AppDatabase, val files: FileStorage) {
 
     private fun safeName(name: String): String =
         name.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim().trimEnd('.').take(100)
+
+    /** Добавляет содержимое zip-архива в раздел [targetId] (null — на главный экран). */
+    suspend fun importZip(uri: Uri, targetId: Long?): ImportResult = ZipImporter(this, files).import(uri, targetId)
 
     suspend fun deleteEntry(id: Long) {
         val entry = dao.getEntry(id) ?: return
