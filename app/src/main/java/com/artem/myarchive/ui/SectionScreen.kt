@@ -1,5 +1,6 @@
 package com.artem.myarchive.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,14 +23,18 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,6 +76,7 @@ private sealed interface SectionDialog {
     data object Add : SectionDialog
     data class Rename(val section: Section) : SectionDialog
     data class Delete(val section: Section) : SectionDialog
+    data class DeleteSelected(val sections: Set<Long>, val entries: Set<Long>) : SectionDialog
 }
 
 /**
@@ -106,12 +112,72 @@ fun SectionScreen(
     // Если текущий раздел удалили — возвращаемся назад.
     LaunchedEffect(deleted) { if (deleted) onBack() }
 
+    // Режим выбора: долгое нажатие на раздел/запись или кнопка «Отправить» в шапке.
+    var selecting by remember(sectionId) { mutableStateOf(false) }
+    var selectedSections by remember(sectionId) { mutableStateOf(emptySet<Long>()) }
+    var selectedEntries by remember(sectionId) { mutableStateOf(emptySet<Long>()) }
+    val selectedCount = selectedSections.size + selectedEntries.size
+    fun clearSelection() {
+        selecting = false
+        selectedSections = emptySet()
+        selectedEntries = emptySet()
+    }
+    fun toggleSection(id: Long) {
+        selecting = true
+        selectedSections = if (id in selectedSections) selectedSections - id else selectedSections + id
+    }
+    fun toggleEntry(id: Long) {
+        selecting = true
+        selectedEntries = if (id in selectedEntries) selectedEntries - id else selectedEntries + id
+    }
+    BackHandler(enabled = selecting) { clearSelection() }
+
+    val shareAction = rememberShareAction()
+    val rootTitle = "Инженерный справочник"
+    fun shareSelected() {
+        val oneSection = selectedSections.singleOrNull()?.takeIf { selectedEntries.isEmpty() }
+        val oneEntry = selectedEntries.singleOrNull()?.takeIf { selectedSections.isEmpty() }
+        val name = oneSection?.let { id -> subsections?.find { it.section.id == id }?.section?.title }
+            ?: oneEntry?.let { id -> entries?.find { it.entry.id == id }?.entry?.title }
+            ?: section?.title
+            ?: rootTitle
+        shareAction.share(name, selectedSections.toList(), selectedEntries.toList()) { clearSelection() }
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (selecting) {
+                TopAppBar(
+                    title = { Text(if (selectedCount == 0) "Выберите, что отправить" else "Выбрано: $selectedCount") },
+                    navigationIcon = {
+                        IconButton(onClick = { clearSelection() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Отменить выбор")
+                        }
+                    },
+                    actions = {
+                        if (selectedSections.size == 1 && selectedEntries.isEmpty()) {
+                            val id = selectedSections.first()
+                            IconButton(onClick = {
+                                subsections?.find { it.section.id == id }?.let { dialog = SectionDialog.Rename(it.section) }
+                            }) {
+                                Icon(Icons.Default.Edit, contentDescription = "Переименовать")
+                            }
+                        }
+                        IconButton(
+                            onClick = { dialog = SectionDialog.DeleteSelected(selectedSections, selectedEntries) },
+                            enabled = selectedCount > 0,
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Удалить")
+                        }
+                        IconButton(onClick = { shareSelected() }, enabled = selectedCount > 0) {
+                            Icon(Icons.Default.Share, contentDescription = "Отправить")
+                        }
+                    },
+                )
+            } else TopAppBar(
                 title = {
                     Text(
-                        if (isRoot) "Мой архив" else section?.title.orEmpty(),
+                        if (isRoot) rootTitle else section?.title.orEmpty(),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -124,6 +190,11 @@ fun SectionScreen(
                     }
                 },
                 actions = {
+                    if (!subsections.isNullOrEmpty() || !entries.isNullOrEmpty()) {
+                        IconButton(onClick = { selecting = true }) {
+                            Icon(Icons.Default.Share, contentDescription = "Выбрать и отправить")
+                        }
+                    }
                     val current = section
                     if (current != null) {
                         IconButton(onClick = { menuOpen = true }) {
@@ -134,6 +205,14 @@ fun SectionScreen(
                                 text = { Text("Переименовать") },
                                 leadingIcon = { Icon(Icons.Default.Edit, null) },
                                 onClick = { menuOpen = false; dialog = SectionDialog.Rename(current) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Отправить весь раздел") },
+                                leadingIcon = { Icon(Icons.Default.Share, null) },
+                                onClick = {
+                                    menuOpen = false
+                                    shareAction.share(current.title, listOf(current.id), emptyList())
+                                },
                             )
                             DropdownMenuItem(
                                 text = { Text("Удалить раздел") },
@@ -147,7 +226,7 @@ fun SectionScreen(
         },
         floatingActionButton = {
             val isEmpty = subsections.isNullOrEmpty() && entries.isNullOrEmpty()
-            if (!isEmpty) {
+            if (!isEmpty && !selecting) {
                 if (isRoot) {
                     ExtendedFloatingActionButton(
                         onClick = { dialog = SectionDialog.Add },
@@ -200,23 +279,32 @@ fun SectionScreen(
                 if (subs.isNotEmpty()) {
                     item { Header(if (isRoot) "Разделы" else "Подразделы") }
                     items(subs, key = { "s" + it.section.id }) { item ->
+                        val id = item.section.id
                         SectionCard(
                             item = item,
-                            onClick = { onOpenSection(item.section.id) },
-                            onRename = { dialog = SectionDialog.Rename(item.section) },
-                            onDelete = { dialog = SectionDialog.Delete(item.section) },
+                            selected = id in selectedSections,
+                            onClick = { if (selecting) toggleSection(id) else onOpenSection(id) },
+                            onLongClick = { toggleSection(id) },
                         )
                     }
                 }
                 if (list.isNotEmpty()) {
                     item { Header("Записи") }
                     items(list, key = { "e" + it.entry.id }) { entry ->
-                        EntryCard(entry, onClick = { onOpenEntry(entry.entry.id) })
+                        val id = entry.entry.id
+                        EntryCard(
+                            item = entry,
+                            selected = id in selectedEntries,
+                            onClick = { if (selecting) toggleEntry(id) else onOpenEntry(id) },
+                            onLongClick = { toggleEntry(id) },
+                        )
                     }
                 }
             }
         }
     }
+
+    ShareProgress(shareAction)
 
     when (val d = dialog) {
         null -> Unit
@@ -236,6 +324,26 @@ fun SectionScreen(
             onConfirm = { name ->
                 dialog = null
                 scope.launch { repo.renameSection(d.section, name) }
+                clearSelection()
+            },
+        )
+        is SectionDialog.DeleteSelected -> ConfirmDialog(
+            title = "Удалить выбранное?",
+            text = buildString {
+                append("Будет удалено: ")
+                append(
+                    listOfNotNull(
+                        d.sections.size.takeIf { it > 0 }?.let { plural(it, "раздел", "раздела", "разделов") },
+                        d.entries.size.takeIf { it > 0 }?.let { plural(it, "запись", "записи", "записей") },
+                    ).joinToString(" и ")
+                )
+                append(". Разделы удаляются вместе со всеми подразделами, записями и файлами.")
+            },
+            onDismiss = { dialog = null },
+            onConfirm = {
+                dialog = null
+                clearSelection()
+                scope.launch { repo.deleteAll(d.sections, d.entries) }
             },
         )
         is SectionDialog.Delete -> ConfirmDialog(
@@ -310,20 +418,25 @@ private fun EmptyState(
 @Composable
 private fun SectionCard(
     item: SectionItem,
+    selected: Boolean,
     onClick: () -> Unit,
-    onRename: () -> Unit,
-    onDelete: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
-    var menu by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(CardShape)
-            .combinedClickable(onClick = onClick, onLongClick = { menu = true }),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = CardShape,
+        colors = cardColors(selected),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+            Icon(
+                if (selected) Icons.Default.CheckCircle else Icons.Default.Folder,
+                null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(36.dp),
+            )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -344,18 +457,41 @@ private fun SectionCard(
                 )
             }
             Icon(Icons.Default.ChevronRight, null)
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Переименовать") }, onClick = { menu = false; onRename() })
-                DropdownMenuItem(text = { Text("Удалить") }, onClick = { menu = false; onDelete() })
-            }
         }
     }
 }
 
 @Composable
-private fun EntryCard(item: EntryWithAttachments, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = CardShape) {
+private fun cardColors(selected: Boolean) =
+    if (selected) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    else CardDefaults.cardColors()
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun EntryCard(
+    item: EntryWithAttachments,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        shape = CardShape,
+        colors = cardColors(selected),
+    ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (selected) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp),
+                )
+                Spacer(Modifier.width(12.dp))
+            }
             val cover = item.images.firstOrNull()
             if (cover != null) {
                 val context = LocalContext.current

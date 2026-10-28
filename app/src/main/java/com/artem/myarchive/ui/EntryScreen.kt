@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -74,6 +75,7 @@ fun EntryScreen(
     // LOADING — запись ещё загружается, null — запись удалена.
     val state: EntryWithAttachments? by remember(entryId) { repo.entry(entryId) }.collectAsState(initial = LOADING)
     var confirmDelete by remember { mutableStateOf(false) }
+    val shareAction = rememberShareAction()
 
     LaunchedEffect(state) { if (state == null) onBack() }
     val item = state ?: return
@@ -89,6 +91,9 @@ fun EntryScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { shareAction.share(item.entry.title, emptyList(), listOf(entryId)) }) {
+                        Icon(Icons.Default.Share, contentDescription = "Отправить")
+                    }
                     IconButton(onClick = { onEdit(item.entry.sectionId) }) {
                         Icon(Icons.Default.Edit, contentDescription = "Редактировать")
                     }
@@ -175,6 +180,8 @@ fun EntryScreen(
             Spacer(Modifier.height(24.dp))
         }
     }
+
+    ShareProgress(shareAction)
 
     if (confirmDelete) {
         ConfirmDialog(

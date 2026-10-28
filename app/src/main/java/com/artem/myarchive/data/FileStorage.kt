@@ -1,5 +1,6 @@
 package com.artem.myarchive.data
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -20,6 +21,22 @@ class FileStorage(private val context: Context) {
     private val dir: File = File(context.filesDir, "attachments").apply { mkdirs() }
 
     fun file(attachment: Attachment): File = File(dir, attachment.fileName)
+
+    /** Папка для временных архивов, которые отправляются через другие приложения. */
+    fun shareDir(): File = File(context.cacheDir, "share").apply { mkdirs() }
+
+    /** Отправить файл через мессенджер, почту и т.п. (системное меню «Поделиться»). */
+    fun shareFile(file: File, mimeType: String = "application/zip") {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+        val send = Intent(Intent.ACTION_SEND)
+            .setType(mimeType)
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        send.clipData = ClipData.newRawUri(file.name, uri)
+        val chooser = Intent.createChooser(send, "Отправить")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
+    }
 
     /** Копирует файл по [uri] во внутреннее хранилище. entryId заполняется при сохранении записи. */
     suspend fun import(uri: Uri): Attachment = withContext(Dispatchers.IO) {

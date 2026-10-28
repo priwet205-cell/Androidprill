@@ -28,6 +28,12 @@ interface ArchiveDao {
     @Query("SELECT * FROM sections WHERE id = :id")
     fun observeSection(id: Long): Flow<Section?>
 
+    @Query("SELECT * FROM sections WHERE id = :id")
+    suspend fun getSection(id: Long): Section?
+
+    @Query("SELECT * FROM sections WHERE parentId = :parentId ORDER BY createdAt")
+    suspend fun childSections(parentId: Long): List<Section>
+
     @Query("SELECT id FROM sections WHERE parentId = :parentId")
     suspend fun childSectionIds(parentId: Long): List<Long>
 
@@ -53,6 +59,10 @@ interface ArchiveDao {
     @Transaction
     @Query("SELECT * FROM entries WHERE id = :id")
     suspend fun getEntry(id: Long): EntryWithAttachments?
+
+    @Transaction
+    @Query("SELECT * FROM entries WHERE sectionId = :sectionId ORDER BY createdAt")
+    suspend fun entriesIn(sectionId: Long): List<EntryWithAttachments>
 
     @Insert
     suspend fun insertEntry(entry: Entry): Long
