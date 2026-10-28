@@ -37,6 +37,12 @@ interface ArchiveDao {
     @Query("SELECT id FROM sections WHERE parentId = :parentId")
     suspend fun childSectionIds(parentId: Long): List<Long>
 
+    @Query("UPDATE sections SET parentId = :parentId WHERE id IN (:ids)")
+    suspend fun moveSections(ids: List<Long>, parentId: Long?)
+
+    @Query("UPDATE entries SET sectionId = :sectionId, updatedAt = :now WHERE id IN (:ids)")
+    suspend fun moveEntries(ids: List<Long>, sectionId: Long, now: Long)
+
     @Insert
     suspend fun insertSection(section: Section): Long
 

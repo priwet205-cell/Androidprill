@@ -1,5 +1,6 @@
 package com.artem.myarchive.ui
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
@@ -77,6 +79,7 @@ private sealed interface SectionDialog {
     data class Rename(val section: Section) : SectionDialog
     data class Delete(val section: Section) : SectionDialog
     data class DeleteSelected(val sections: Set<Long>, val entries: Set<Long>) : SectionDialog
+    data class Move(val sections: Set<Long>, val entries: Set<Long>) : SectionDialog
 }
 
 /**
@@ -162,6 +165,12 @@ fun SectionScreen(
                             }) {
                                 Icon(Icons.Default.Edit, contentDescription = "Переименовать")
                             }
+                        }
+                        IconButton(
+                            onClick = { dialog = SectionDialog.Move(selectedSections, selectedEntries) },
+                            enabled = selectedCount > 0,
+                        ) {
+                            Icon(Icons.Default.DriveFileMove, contentDescription = "Переместить")
                         }
                         IconButton(
                             onClick = { dialog = SectionDialog.DeleteSelected(selectedSections, selectedEntries) },
@@ -325,6 +334,24 @@ fun SectionScreen(
                 dialog = null
                 scope.launch { repo.renameSection(d.section, name) }
                 clearSelection()
+            },
+        )
+        is SectionDialog.Move -> MoveDialog(
+            movingSections = d.sections,
+            hasEntries = d.entries.isNotEmpty(),
+            startId = sectionId,
+            onDismiss = { dialog = null },
+            onMove = { target ->
+                dialog = null
+                clearSelection()
+                scope.launch {
+                    val skipped = repo.move(d.sections, d.entries, target)
+                    if (skipped > 0) {
+                        Toast.makeText(context, "Раздел нельзя переместить внутрь самого себя", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(context, "Перемещено", Toast.LENGTH_SHORT).show()
+                    }
+                }
             },
         )
         is SectionDialog.DeleteSelected -> ConfirmDialog(

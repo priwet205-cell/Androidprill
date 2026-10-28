@@ -25,14 +25,35 @@ class Repository(private val db: AppDatabase, val files: FileStorage) {
     suspend fun renameSection(section: Section, title: String) =
         dao.updateSection(section.copy(title = title.trim()))
 
-    /** Удаляет раздел со всеми подразделами, записями и файлами вложений. */
-    suspend fun deleteSection(id: Long) {
+    /** Раздел и все его подразделы на любой глубине. */
+    private suspend fun withDescendants(id: Long): List<Long> {
         val ids = mutableListOf(id)
         var i = 0
         while (i < ids.size) {
             ids += dao.childSectionIds(ids[i])
             i++
         }
+        return ids
+    }
+
+    /**
+     * Переносит записи и разделы в раздел [targetId] (null — на главный экран, только для разделов).
+     * Раздел нельзя перенести внутрь самого себя; такие разделы пропускаются.
+     * Возвращает число пропущенных разделов.
+     */
+    suspend fun move(sectionIds: Collection<Long>, entryIds: Collection<Long>, targetId: Long?): Int =
+        db.withTransaction {
+            if (entryIds.isNotEmpty() && targetId != null) {
+                dao.moveEntries(entryIds.toList(), targetId, System.currentTimeMillis())
+            }
+            val allowed = sectionIds.filter { id -> targetId == null || targetId !in withDescendants(id) }
+            if (allowed.isNotEmpty()) dao.moveSections(allowed, targetId)
+            sectionIds.size - allowed.size
+        }
+
+    /** Удаляет раздел со всеми подразделами, записями и файлами вложений. */
+    suspend fun deleteSection(id: Long) {
+        val ids = withDescendants(id)
         val attachments = ids.chunked(500).flatMap { dao.attachmentsInSections(it) }
         dao.deleteSection(id) // записи и вложения удалятся каскадно
         files.delete(attachments)
