@@ -19,7 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoMode
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.Card
@@ -182,7 +182,7 @@ private fun Swatch(color: Color?, selected: Boolean, onClick: () -> Unit) {
         else if (color.luminance() < 0.5f) Color.White else Color.Black
         when {
             selected -> Icon(Icons.Default.Check, contentDescription = "Выбрано", tint = iconTint)
-            color == null -> Icon(Icons.Default.AutoMode, contentDescription = "Авто", tint = iconTint)
+            color == null -> Icon(Icons.Default.Autorenew, contentDescription = "Авто", tint = iconTint)
         }
     }
 }
