@@ -77,7 +77,11 @@ class ImportAction(private val context: Context, private val scope: CoroutineSco
                     result.sections.takeIf { it > 0 }?.let { plural(it, "раздел", "раздела", "разделов") },
                     result.entries.takeIf { it > 0 }?.let { plural(it, "запись", "записи", "записей") },
                 )
-                val message = if (parts.isEmpty()) "В архиве нет данных для импорта" else "Добавлено: " + parts.joinToString(" и ")
+                val merged = if (result.merged > 0) {
+                    ". В существующие разделы: " + plural(result.merged, "раздел", "раздела", "разделов")
+                } else ""
+                val message = if (parts.isEmpty()) "В архиве нет данных для импорта"
+                else "Добавлено: " + parts.joinToString(" и ") + merged
                 Toast.makeText(context, message, Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 Toast.makeText(context, "Не удалось открыть архив: ${e.message}", Toast.LENGTH_LONG).show()

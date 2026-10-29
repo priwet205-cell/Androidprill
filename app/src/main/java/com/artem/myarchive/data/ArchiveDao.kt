@@ -34,6 +34,9 @@ interface ArchiveDao {
     @Query("SELECT * FROM sections WHERE parentId = :parentId ORDER BY createdAt")
     suspend fun childSections(parentId: Long): List<Section>
 
+    @Query("SELECT * FROM sections WHERE parentId IS :parentId ORDER BY createdAt")
+    suspend fun sectionsIn(parentId: Long?): List<Section>
+
     @Query("SELECT id FROM sections WHERE parentId = :parentId")
     suspend fun childSectionIds(parentId: Long): List<Long>
 

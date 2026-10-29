@@ -8,11 +8,12 @@ import java.nio.charset.Charset
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
-data class ImportResult(val sections: Int, val entries: Int)
+data class ImportResult(val sections: Int, val entries: Int, val merged: Int = 0)
 
 /**
  * Импорт zip-архива. Понимает архивы, сделанные кнопкой «Отправить» (папка записи содержит «Описание.txt»),
  * и обычные zip: папки становятся подразделами, а каждый отдельный файл — записью с этим файлом.
+ * Если раздел с таким названием уже есть, новые записи добавляются в него, а не в новую копию раздела.
  */
 class ZipImporter(private val repo: Repository, private val files: FileStorage) {
 
@@ -24,6 +25,7 @@ class ZipImporter(private val repo: Repository, private val files: FileStorage) 
 
     private var sections = 0
     private var entries = 0
+    private var merged = 0
 
     suspend fun import(uri: Uri, targetId: Long?): ImportResult = withContext(Dispatchers.IO) {
         val archiveName = files.displayName(uri)?.substringBeforeLast('.')?.ifBlank { null } ?: "Импорт"
@@ -34,14 +36,14 @@ class ZipImporter(private val repo: Repository, private val files: FileStorage) 
                 var holder: Long? = targetId
                 // Записи нельзя класть на главный экран — для них создаётся раздел с именем архива.
                 val holderProvider: suspend () -> Long = {
-                    holder ?: repo.addSection(null, archiveName).also { holder = it; sections++ }
+                    holder ?: sectionFor(null, archiveName).also { holder = it }
                 }
                 importInto(zip, root, targetId, holderProvider)
             }
         } finally {
             tmp.delete()
         }
-        ImportResult(sections, entries)
+        ImportResult(sections, entries, merged)
     }
 
     /** Имена файлов в zip из Windows бывают в кодировке CP866 — пробуем её, если UTF-8 не подошла. */
@@ -78,8 +80,7 @@ class ZipImporter(private val repo: Repository, private val files: FileStorage) 
             if (dir.isEntryFolder && dir.dirs.isEmpty()) {
                 importEntryFolder(zip, dir, sectionId ?: holder())
             } else {
-                val id = repo.addSection(sectionId, dir.name)
-                sections++
+                val id = sectionFor(sectionId, dir.name)
                 importInto(zip, dir, id) { id }
             }
         }
@@ -90,6 +91,16 @@ class ZipImporter(private val repo: Repository, private val files: FileStorage) 
             repo.saveEntry(null, sectionId ?: holder(), name.substringBeforeLast('.').ifBlank { name }, "", listOf(attachment), emptyList())
             entries++
         }
+    }
+
+    /**
+     * Папка из архива с тем же названием, что и существующий раздел на этом уровне,
+     * не создаёт дубликат: её содержимое добавляется в уже существующий раздел.
+     */
+    private suspend fun sectionFor(parentId: Long?, title: String): Long {
+        repo.findSection(parentId, title)?.let { merged++; return it.id }
+        sections++
+        return repo.addSection(parentId, title)
     }
 
     private suspend fun importEntryFolder(zip: ZipFile, dir: Node, sectionId: Long) {

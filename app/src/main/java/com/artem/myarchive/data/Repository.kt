@@ -20,6 +20,12 @@ class Repository(private val db: AppDatabase, val files: FileStorage) {
     suspend fun getEntry(id: Long) = dao.getEntry(id)
     suspend fun getAttachment(id: Long) = dao.getAttachment(id)
 
+    /** Существующий раздел с таким же названием (без учёта регистра и пробелов по краям) или null. */
+    suspend fun findSection(parentId: Long?, title: String): Section? {
+        val key = title.trim().lowercase()
+        return dao.sectionsIn(parentId).firstOrNull { it.title.trim().lowercase() == key }
+    }
+
     suspend fun addSection(parentId: Long?, title: String) =
         dao.insertSection(Section(parentId = parentId, title = title.trim()))
 
