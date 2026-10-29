@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.Button
@@ -96,6 +97,7 @@ fun SectionScreen(
     onOpenSection: (Long) -> Unit,
     onOpenEntry: (Long) -> Unit,
     onAddEntry: (Long) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val repo = context.repository
@@ -206,6 +208,11 @@ fun SectionScreen(
                     }
                 },
                 actions = {
+                    if (isRoot) {
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Default.Palette, contentDescription = "Оформление")
+                        }
+                    }
                     IconButton(onClick = { pickZip.launch(arrayOf("*/*")) }) {
                         Icon(Icons.Default.Unarchive, contentDescription = "Импорт из zip")
                     }

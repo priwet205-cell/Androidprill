@@ -28,7 +28,12 @@ fun AppNavigation() {
                 onOpenSection = { nav.navigate("section/$it") },
                 onOpenEntry = { nav.navigate("entry/$it") },
                 onAddEntry = { sectionId -> nav.navigate("edit/$sectionId/$NONE") },
+                onOpenSettings = { nav.navigate("settings") },
             )
+        }
+
+        composable("settings") {
+            SettingsScreen(onBack = { nav.popBackStack() })
         }
 
         composable(

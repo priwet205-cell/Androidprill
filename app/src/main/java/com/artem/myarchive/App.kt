@@ -6,6 +6,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
 import com.artem.myarchive.data.AppDatabase
+import com.artem.myarchive.data.AppSettings
 import com.artem.myarchive.data.FileStorage
 import com.artem.myarchive.data.Repository
 
@@ -15,6 +16,8 @@ class App : Application(), ImageLoaderFactory {
         Repository(AppDatabase.create(this), FileStorage(this))
     }
 
+    val settings: AppSettings by lazy { AppSettings(this) }
+
     // Coil умеет показывать превью (первый кадр) для видео.
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .components { add(VideoFrameDecoder.Factory()) }
@@ -23,3 +26,5 @@ class App : Application(), ImageLoaderFactory {
 }
 
 val Context.repository: Repository get() = (applicationContext as App).repository
+
+val Context.settings: AppSettings get() = (applicationContext as App).settings
